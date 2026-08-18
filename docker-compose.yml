@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tradewise
+      POSTGRES_USER: tradewise
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tradewise}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tradewise-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradewise -d tradewise"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/tradewise
+      DB_USERNAME: tradewise
+      DB_PASSWORD: ${DB_PASSWORD:-tradewise}
+      # No default on purpose: compose fails fast if JWT_SECRET is not exported.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (>= 32 characters) before starting}
+    ports:
+      - "8080:8080"
+
+volumes:
+  tradewise-pgdata:

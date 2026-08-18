@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: tradewise
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tradewise}
+    username: ${DB_USERNAME:tradewise}
+    password: ${DB_PASSWORD:tradewise}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+tradewise:
+  security:
+    jwt:
+      # No default on purpose: the application refuses to start without a secret.
+      secret: ${JWT_SECRET:}
+      expiry-seconds: ${JWT_EXPIRY_SECONDS:3600}
+      issuer: tradewise
+    bcrypt-cost: 12
+  wallet:
+    seed-balance: ${WALLET_SEED_BALANCE:1000000.0000}
+  marketdata:
+    simulator:
+      # Phase 1: the simulated market is always open so trading is demoable at any hour.
+      # Set false to derive OPEN/PRE_OPEN/CLOSED/HOLIDAY from real NSE hours (IST).
+      always-open: ${SIMULATOR_ALWAYS_OPEN:true}
