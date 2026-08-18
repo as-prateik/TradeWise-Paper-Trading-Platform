@@ -29,5 +29,14 @@ services:
     ports:
       - "8080:8080"
 
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    # nginx serves the built Angular app and proxies /api to the backend, so the
+    # browser talks to a single origin and there is no CORS surface at all.
+    ports:
+      - "4200:80"
+
 volumes:
   tradewise-pgdata:

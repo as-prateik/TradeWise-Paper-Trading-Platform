@@ -4,10 +4,11 @@ A real-time paper trading platform: virtual cash, real-feeling market data, mark
 and portfolio tracking with honest P&L accounting. Built as a portfolio project with a
 depth-over-breadth philosophy — a correct, tested order engine over a dozen half-features.
 
-**Phase 1 (this repo): backend complete.** Auth, virtual wallet, deterministic market
-simulator, market buy/sell with an atomic execution engine, portfolio with realized and
-unrealized P&L, and a read-only dashboard. The Angular frontend and advanced order types
-are Phase 2 (see [Roadmap](#roadmap--out-of-scope-for-phase-1)).
+**Phase 1 (this repo): backend + frontend complete.** Auth, virtual wallet, deterministic
+market simulator, market buy/sell with an atomic execution engine, portfolio with realized
+and unrealized P&L, a read-only dashboard — and an Angular 22 client covering all seven
+screens. Advanced order types, watchlists and WebSocket streaming are Phase 2 (see
+[Roadmap](#roadmap--out-of-scope-for-phase-1)).
 
 ## Architecture
 
@@ -49,9 +50,16 @@ com.tradewise
 
 ## Tech stack
 
-Java 21 · Spring Boot 4.1.0 (Spring Framework 7, Jackson 3) · Spring Security 7 + JWT (jjwt 0.12.6)
-· Spring Data JPA / Hibernate 7 · PostgreSQL 17 · Flyway 12 · Lombok · JUnit 5/6 + Mockito +
-AssertJ + Testcontainers · Docker + Docker Compose · GitHub Actions
+**Backend** — Java 21 · Spring Boot 4.1.0 (Spring Framework 7, Jackson 3) · Spring Security 7
++ JWT (jjwt 0.12.6) · Spring Data JPA / Hibernate 7 · PostgreSQL 17 · Flyway 12 · Lombok ·
+JUnit 5/6 + Mockito + AssertJ + Testcontainers
+
+**Frontend** — Angular 22 (standalone components, signals, zoneless change detection) ·
+TypeScript 6 in strict mode · lightweight-charts 5 for candlesticks · hand-rolled CSS design
+tokens, no UI framework
+
+**Delivery** — Docker + Docker Compose (Postgres + backend + nginx-served frontend) ·
+GitHub Actions
 
 ## Data model
 
@@ -138,12 +146,58 @@ Every non-2xx response uses one envelope:
   "fieldErrors": null }
 ```
 
+## Frontend
+
+Seven screens, all lazily routed: **Login/Register · Dashboard · Trade · Stock detail ·
+Portfolio · Orders (with a Trades tab) · Account**.
+
+Decisions worth knowing:
+
+- **Signals, zoneless.** State lives in signals inside services and components;
+  `provideZonelessChangeDetection()` means no zone.js patching in the bundle.
+- **Two interceptors, no leakage.** `authInterceptor` attaches the bearer token;
+  `errorInterceptor` converts every failure into one typed `AppError` and handles the
+  single global case — a 401 clears the session and redirects to login. Components never
+  see an `HttpErrorResponse`.
+- **Polling, not WebSocket** (a documented Phase 1 decision). `pollWhileVisible()` refreshes
+  every 12s, pauses on hidden tabs, and refetches on refocus. Screens are shaped around
+  this function so a WebSocket source can replace it without touching them.
+- **Rejections are outcomes, not errors.** An `INSUFFICIENT_FUNDS` order returns 201 with
+  status `REJECTED`; the UI shows it as an in-place outcome banner, never a crash toast.
+- **Idempotency.** Every order submission mints a UUID `Idempotency-Key`, so a double-click
+  cannot open two positions.
+- **Money is display-only on the client.** The server is the sole authority for money
+  arithmetic; the one client-side figure (the order ticket's cost preview) is explicitly
+  labelled an estimate. All formatting goes through a single `money` pipe.
+- **No colour-only meaning.** Gains and losses carry an explicit sign as well as a colour.
+- **Loading / empty / error on every data view**, via a shared `StateBlock`; a background
+  poll never blanks a screen the user is reading.
+
+Bundle: ~295 kB initial (~81 kB transferred). The charting library is isolated in the
+lazily-loaded stock-detail chunk, so it costs nothing until a chart is opened.
+
 ## Run it
 
 ```bash
 export JWT_SECRET="change-me-to-a-random-string-of-32+chars"
 docker compose up --build
 ```
+
+Then open **http://localhost:4200** — register an account and you're trading with
+₹10,00,000 of virtual cash. The API is on http://localhost:8080.
+
+### Running the frontend on its own
+
+```bash
+cd frontend
+npm ci
+npm start          # http://localhost:4200, proxies /api to localhost:8080
+npm run build      # production build into dist/
+```
+
+Requires **Node ≥ 22.22.3** (or 24.15+/26+) — Angular 22's floor, declared in
+`package.json` engines. The Docker build pins Node 24 so the container never depends on
+your local version.
 
 Then:
 
@@ -177,8 +231,12 @@ CI (GitHub Actions) runs the full suite including integration tests on every pus
 - **Market data is simulated.** Prices are a deterministic function around fixed
   reference anchors, not a live feed. The `MarketDataProvider` interface is the seam
   where a real provider plugs in; nothing downstream would change.
-- **No frontend yet.** Phase 1 is backend-only by deliberate scope cut; the API is
-  designed against the seven planned screens (spec in the project docs).
+- **The frontend has no automated tests yet.** It was verified by a scripted browser
+  click-through (register → buy → reject → sell → portfolio → chart → orders → account,
+  plus guard and offline-error paths) and builds clean under strict mode, but there are no
+  committed unit or e2e specs. That's the first thing I'd add.
+- **No WebSocket, so the UI polls** every 12 seconds. Prices tick visibly but not
+  instantly, and two tabs can briefly disagree.
 - **springdoc/Swagger UI is not wired in.** This project targets Spring Boot 4.1, and
   the build environment used for Phase 1 had no Boot-4-compatible springdoc artifact
   available. The OpenAPI spec is maintained by hand at `backend/docs/openapi.yaml` and
@@ -199,5 +257,6 @@ CI (GitHub Actions) runs the full suite including integration tests on every pus
 
 Limit and stop-loss orders + the matching engine (sweep vs tick evaluation, gap
 handling, double-execution prevention) · order cancellation and expiry · WebSocket
-streaming · watchlists and price alerts · the Angular frontend (7 screens) · refresh
-tokens and email verification · Redis quote caching (only when measurement demands it).
+streaming to replace polling · watchlists and price alerts · frontend unit/e2e test suite ·
+refresh tokens and email verification · Redis quote caching (only when measurement
+demands it).
