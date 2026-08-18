@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: TradeWise API
+  description: >
+    Real-time paper trading platform — Phase 1 backend.
+    All endpoints except /auth/** require a Bearer JWT. Identity is always taken from
+    the token, never from the request. Every non-2xx response uses the standard error
+    envelope with a stable machine-readable errorCode.
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+  - name: user
+  - name: wallet
+  - name: market
+  - name: orders
+  - name: portfolio
+  - name: dashboard
+
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register and auto-login
+      description: Creates the user and seeds the wallet atomically; returns a token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            example: { email: trader@example.com, password: passw0rd123, fullName: A Trader }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: EMAIL_ALREADY_REGISTERED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Login
+      description: Identical response for unknown email and wrong password (no enumeration oracle).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401':
+          description: INVALID_CREDENTIALS
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/users/me:
+    get:
+      tags: [user]
+      summary: Current user profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/wallets/me:
+    get:
+      tags: [wallet]
+      summary: Current wallet balance
+      responses:
+        '200':
+          description: Wallet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: number, example: 983270.8000 }
+                  updatedAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/transactions:
+    get:
+      tags: [wallet]
+      summary: Cash movement history (paged, newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Page of transactions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/market/search:
+    get:
+      tags: [market]
+      summary: Search stocks by symbol or company name
+      parameters:
+        - { name: query, in: query, required: true, schema: { type: string, maxLength: 60 } }
+      responses:
+        '200':
+          description: Matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StockSearchResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/market/quotes/{symbol}:
+    get:
+      tags: [market]
+      summary: Point-in-time quote
+      parameters:
+        - { name: symbol, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '404':
+          description: SYMBOL_NOT_FOUND
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/market/history/{symbol}:
+    get:
+      tags: [market]
+      summary: Historical candles for charting
+      parameters:
+        - { name: symbol, in: path, required: true, schema: { type: string } }
+        - name: range
+          in: query
+          schema: { type: string, enum: [ONE_DAY, ONE_WEEK, ONE_MONTH, THREE_MONTHS, ONE_YEAR], default: ONE_MONTH }
+      responses:
+        '200':
+          description: Candles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistoricalData' }
+        '404':
+          description: SYMBOL_NOT_FOUND
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/market/status:
+    get:
+      tags: [market]
+      summary: Market status (OPEN | PRE_OPEN | CLOSED | HOLIDAY)
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: OPEN }
+                  asOf: { type: string, format: date-time }
+
+  /api/v1/orders:
+    post:
+      tags: [orders]
+      summary: Place a market order (synchronous execution)
+      description: >
+        Requires an Idempotency-Key header; replaying the same key returns the original
+        order with 200 and executes nothing twice. Business rejections (INSUFFICIENT_FUNDS,
+        INSUFFICIENT_SHARES, MARKET_CLOSED) are recorded orders returned with status
+        REJECTED — they are outcomes, not HTTP errors.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlaceOrderRequest' }
+            example: { symbol: RELIANCE, side: BUY, type: MARKET, quantity: 10 }
+      responses:
+        '201':
+          description: Order processed (EXECUTED or REJECTED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '200':
+          description: Idempotent replay — the original order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404':
+          description: SYMBOL_NOT_FOUND (no order recorded)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: CONCURRENT_MODIFICATION — retry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    get:
+      tags: [orders]
+      summary: Order history — every order, every status (paged, newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Page of orders
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+
+  /api/v1/orders/{orderId}:
+    get:
+      tags: [orders]
+      summary: A single own order
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderResponse' }
+        '404':
+          description: RESOURCE_NOT_FOUND (including another user's order)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/trades:
+    get:
+      tags: [orders]
+      summary: Trade history — executions only (paged, newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Page of trades
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TradePage' }
+
+  /api/v1/portfolio:
+    get:
+      tags: [portfolio]
+      summary: Holdings with valuation, P&L and allocation
+      responses:
+        '200':
+          description: Portfolio
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PortfolioResponse' }
+
+  /api/v1/dashboard:
+    get:
+      tags: [dashboard]
+      summary: Read-only account aggregate
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardResponse' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: UNAUTHORIZED — missing/invalid/expired token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationFailed:
+      description: VALIDATION_FAILED with fieldErrors
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer, example: 400 }
+        errorCode:
+          type: string
+          enum: [VALIDATION_FAILED, EMAIL_ALREADY_REGISTERED, INVALID_CREDENTIALS, UNAUTHORIZED,
+                 FORBIDDEN, RESOURCE_NOT_FOUND, SYMBOL_NOT_FOUND, CONCURRENT_MODIFICATION, INTERNAL_ERROR]
+        message: { type: string }
+        path: { type: string }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, maxLength: 72, description: 'At least one letter and one digit; max 72 because BCrypt truncates beyond 72 bytes' }
+        fullName: { type: string, minLength: 2, maxLength: 100 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresInSeconds: { type: integer, example: 3600 }
+        user: { $ref: '#/components/schemas/UserResponse' }
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        fullName: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    StockSearchResult:
+      type: object
+      properties:
+        symbol: { type: string, example: RELIANCE }
+        companyName: { type: string, example: Reliance Industries Ltd }
+        exchange: { type: string, example: NSE }
+
+    Quote:
+      type: object
+      properties:
+        symbol: { type: string }
+        companyName: { type: string }
+        price: { type: number, example: 2808.38 }
+        dayOpen: { type: number }
+        dayHigh: { type: number }
+        dayLow: { type: number }
+        previousClose: { type: number }
+        changeAbsolute: { type: number }
+        changePercent: { type: number }
+        volume: { type: integer }
+        asOf: { type: string, format: date-time }
+
+    HistoricalData:
+      type: object
+      properties:
+        symbol: { type: string }
+        range: { type: string }
+        candles:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp: { type: string, format: date-time }
+              open: { type: number }
+              high: { type: number }
+              low: { type: number }
+              close: { type: number }
+              volume: { type: integer }
+
+    PlaceOrderRequest:
+      type: object
+      required: [symbol, side, type, quantity]
+      properties:
+        symbol: { type: string, maxLength: 20 }
+        side: { type: string, enum: [BUY, SELL] }
+        type: { type: string, enum: [MARKET] }
+        quantity: { type: integer, minimum: 1, maximum: 1000000 }
+
+    OrderResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        symbol: { type: string }
+        side: { type: string, enum: [BUY, SELL] }
+        type: { type: string, enum: [MARKET] }
+        quantity: { type: integer }
+        status: { type: string, enum: [PENDING, EXECUTED, CANCELLED, REJECTED, EXPIRED] }
+        executedPrice: { type: number, nullable: true }
+        executedAt: { type: string, format: date-time, nullable: true }
+        rejectionReason: { type: string, nullable: true, enum: [INSUFFICIENT_FUNDS, INSUFFICIENT_SHARES, MARKET_CLOSED, null] }
+        createdAt: { type: string, format: date-time }
+
+    TradeResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        symbol: { type: string }
+        side: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+        grossAmount: { type: number }
+        executedAt: { type: string, format: date-time }
+
+    TransactionResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [SEED, TRADE_DEBIT, TRADE_CREDIT] }
+        amount: { type: number }
+        balanceAfter: { type: number }
+        referenceOrderId: { type: string, format: uuid, nullable: true }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PortfolioResponse:
+      type: object
+      properties:
+        holdings:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              companyName: { type: string }
+              quantity: { type: integer }
+              averagePrice: { type: number }
+              investedValue: { type: number }
+              currentPrice: { type: number }
+              marketValue: { type: number }
+              unrealizedPnl: { type: number }
+              unrealizedPnlPercent: { type: number }
+              realizedPnl: { type: number }
+              allocationPercent: { type: number }
+        totals:
+          type: object
+          properties:
+            investedValue: { type: number }
+            marketValue: { type: number }
+            unrealizedPnl: { type: number }
+            realizedPnl: { type: number }
+
+    DashboardResponse:
+      type: object
+      properties:
+        cashBalance: { type: number }
+        portfolioMarketValue: { type: number }
+        totalAccountValue: { type: number }
+        investedValue: { type: number }
+        unrealizedPnl: { type: number }
+        realizedPnl: { type: number }
+        openPositionCount: { type: integer }
+        marketStatus: { type: string }
+        recentOrders:
+          type: array
+          items: { $ref: '#/components/schemas/OrderResponse' }
+
+    OrderPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/OrderResponse' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
+
+    TradePage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/TradeResponse' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
+
+    TransactionPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/TransactionResponse' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
