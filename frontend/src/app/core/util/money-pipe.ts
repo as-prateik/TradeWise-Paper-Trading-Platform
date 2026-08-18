@@ -1,13 +1,13 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
-const CURRENCY_FORMAT = new Intl.NumberFormat('en-IN', {
+const CURRENCY_FORMAT = new Intl.NumberFormat('en-US', {
   style: 'currency',
-  currency: 'INR',
+  currency: 'USD',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-const PLAIN_FORMAT = new Intl.NumberFormat('en-IN', {
+const PLAIN_FORMAT = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });

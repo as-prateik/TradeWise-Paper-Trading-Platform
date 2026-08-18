@@ -94,7 +94,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  balance: { type: number, example: 983270.8000 }
+                  balance: { type: number, example: 96944.1000 }
                   updatedAt: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -199,7 +199,7 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/PlaceOrderRequest' }
-            example: { symbol: RELIANCE, side: BUY, type: MARKET, quantity: 10 }
+            example: { symbol: AAPL, side: BUY, type: MARKET, quantity: 10 }
       responses:
         '201':
           description: Order processed (EXECUTED or REJECTED)
@@ -362,16 +362,16 @@ components:
     StockSearchResult:
       type: object
       properties:
-        symbol: { type: string, example: RELIANCE }
-        companyName: { type: string, example: Reliance Industries Ltd }
-        exchange: { type: string, example: NSE }
+        symbol: { type: string, example: AAPL }
+        companyName: { type: string, example: Apple Inc. }
+        exchange: { type: string, example: NASDAQ }
 
     Quote:
       type: object
       properties:
         symbol: { type: string }
         companyName: { type: string }
-        price: { type: number, example: 2808.38 }
+        price: { type: number, example: 305.59 }
         dayOpen: { type: number }
         dayHigh: { type: number }
         dayLow: { type: number }
@@ -379,6 +379,17 @@ components:
         changeAbsolute: { type: number }
         changePercent: { type: number }
         volume: { type: integer }
+        tradingDay:
+          type: string
+          format: date
+          description: The trading day this close belongs to (not the fetch time).
+        source:
+          type: string
+          enum: [LIVE, SIMULATED]
+          description: >
+            LIVE means a real closing price from the market data provider; SIMULATED
+            means no live data was available (no API key, daily request budget spent,
+            or provider unavailable) and the price was generated locally.
         asOf: { type: string, format: date-time }
 
     HistoricalData:

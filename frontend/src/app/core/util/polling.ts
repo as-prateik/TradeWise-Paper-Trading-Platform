@@ -3,8 +3,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { fromEvent, merge, Observable, startWith, switchMap, timer } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 
-/** Phase 1 has no WebSocket; live-ish data comes from polling. */
-export const POLL_INTERVAL_MS = 12_000;
+/**
+ * Phase 1 has no WebSocket. Upstream data is end-of-day, so prices do not tick
+ * between refreshes; polling exists to pick up the user's own trades and the
+ * daily refresh, which needs nothing like a 12-second cadence.
+ */
+export const POLL_INTERVAL_MS = 60_000;
 
 /**
  * Emits on a fixed interval while the tab is visible, and immediately again

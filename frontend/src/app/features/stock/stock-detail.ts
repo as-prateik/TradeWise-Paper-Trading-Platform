@@ -25,6 +25,7 @@ import { Quote, TimeRange } from '../../core/api-types';
 import { AppError } from '../../core/app-error';
 import { MoneyPipe, Percent2Pipe } from '../../core/util/money-pipe';
 import { POLL_INTERVAL_MS, pollWhileVisible } from '../../core/util/polling';
+import { DataSourceChip } from '../../shared/data-source-chip';
 import { StateBlock } from '../../shared/state-block';
 
 interface RangeOption {
@@ -35,7 +36,7 @@ interface RangeOption {
 @Component({
   selector: 'app-stock-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MoneyPipe, Percent2Pipe, StateBlock],
+  imports: [RouterLink, MoneyPipe, Percent2Pipe, StateBlock, DataSourceChip],
   template: `
     <div class="spread head">
       <div>
@@ -60,13 +61,14 @@ interface RangeOption {
         <div class="card quote-card">
           <div class="spread wrap">
             <div>
+              <app-data-source-chip [source]="liveQuote.source" [tradingDay]="liveQuote.tradingDay" />
               <div class="price num">{{ liveQuote.price | money }}</div>
               <div
                 class="num"
                 [class.up]="liveQuote.changeAbsolute > 0"
                 [class.down]="liveQuote.changeAbsolute < 0"
               >
-                {{ liveQuote.changeAbsolute | money: 'signed' }} ({{ liveQuote.changePercent | percent2: true }}) today
+                {{ liveQuote.changeAbsolute | money: 'signed' }} ({{ liveQuote.changePercent | percent2: true }}) on the day
               </div>
             </div>
             <div class="stats">
@@ -74,7 +76,7 @@ interface RangeOption {
               <div><span class="label">High</span><span class="num">{{ liveQuote.dayHigh | money: 'plain' }}</span></div>
               <div><span class="label">Low</span><span class="num">{{ liveQuote.dayLow | money: 'plain' }}</span></div>
               <div><span class="label">Prev close</span><span class="num">{{ liveQuote.previousClose | money: 'plain' }}</span></div>
-              <div><span class="label">Volume</span><span class="num">{{ liveQuote.volume.toLocaleString('en-IN') }}</span></div>
+              <div><span class="label">Volume</span><span class="num">{{ liveQuote.volume.toLocaleString('en-US') }}</span></div>
             </div>
           </div>
         </div>
@@ -134,9 +136,12 @@ export class StockDetail implements OnInit, AfterViewInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly chartHost = viewChild.required<ElementRef<HTMLDivElement>>('chartHost');
 
+  /**
+   * Only ranges that real daily bars can honestly fill. Intraday ranges are absent
+   * because the upstream free tier provides end-of-day data — showing a "1D" chart
+   * would mean inventing intraday movement.
+   */
   protected readonly ranges: RangeOption[] = [
-    { value: 'ONE_DAY', label: '1D' },
-    { value: 'ONE_WEEK', label: '1W' },
     { value: 'ONE_MONTH', label: '1M' },
     { value: 'THREE_MONTHS', label: '3M' },
     { value: 'ONE_YEAR', label: '1Y' },

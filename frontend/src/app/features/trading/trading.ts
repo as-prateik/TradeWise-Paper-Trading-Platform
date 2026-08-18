@@ -9,17 +9,18 @@ import { AppError } from '../../core/app-error';
 import { newIdempotencyKey } from '../../core/util/idempotency';
 import { MoneyPipe, Percent2Pipe } from '../../core/util/money-pipe';
 import { pollWhileVisible } from '../../core/util/polling';
+import { DataSourceChip } from '../../shared/data-source-chip';
 import { REJECTION_TEXT } from '../../shared/order-status-chip';
 
 @Component({
   selector: 'app-trading',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, MoneyPipe, Percent2Pipe],
+  imports: [FormsModule, RouterLink, MoneyPipe, Percent2Pipe, DataSourceChip],
   template: `
     <div class="spread head">
       <div>
         <h1>Trade</h1>
-        <p class="muted small">Market orders execute immediately at the live simulated price.</p>
+        <p class="muted small">Market orders execute immediately at the price shown.</p>
       </div>
       <div class="cash card card-tight">
         <span class="label">Cash available</span>
@@ -34,7 +35,7 @@ import { REJECTION_TEXT } from '../../shared/order-status-chip';
         <input
           class="input"
           type="search"
-          placeholder="Search by symbol or company — try “bank” or “TCS”"
+          placeholder="Search by symbol or company — try “apple” or “NVDA”"
           [ngModel]="searchTerm()"
           (ngModelChange)="onSearchInput($event)"
           aria-label="Search stocks"
@@ -81,6 +82,7 @@ import { REJECTION_TEXT } from '../../shared/order-status-chip';
               <p class="muted small">{{ liveQuote.companyName }}</p>
             </div>
             <div class="right">
+              <app-data-source-chip [source]="liveQuote.source" [tradingDay]="liveQuote.tradingDay" />
               <div class="price num">{{ liveQuote.price | money }}</div>
               <div
                 class="num small"
@@ -97,7 +99,7 @@ import { REJECTION_TEXT } from '../../shared/order-status-chip';
             <div><span class="label">High</span><span class="num">{{ liveQuote.dayHigh | money: 'plain' }}</span></div>
             <div><span class="label">Low</span><span class="num">{{ liveQuote.dayLow | money: 'plain' }}</span></div>
             <div><span class="label">Prev close</span><span class="num">{{ liveQuote.previousClose | money: 'plain' }}</span></div>
-            <div><span class="label">Volume</span><span class="num">{{ liveQuote.volume.toLocaleString('en-IN') }}</span></div>
+            <div><span class="label">Volume</span><span class="num">{{ liveQuote.volume.toLocaleString('en-US') }}</span></div>
           </div>
 
           <hr class="divider" />

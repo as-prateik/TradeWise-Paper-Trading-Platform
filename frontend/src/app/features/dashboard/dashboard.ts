@@ -137,7 +137,7 @@ import { StateBlock } from '../../shared/state-block';
           </section>
         </div>
 
-        <p class="muted small refresh">Auto-refreshing every 12s · updated {{ updatedAt() | date: 'HH:mm:ss' }}</p>
+        <p class="muted small refresh">Refreshed {{ updatedAt() | date: 'HH:mm:ss' }}</p>
       }
     </app-state-block>
   `,

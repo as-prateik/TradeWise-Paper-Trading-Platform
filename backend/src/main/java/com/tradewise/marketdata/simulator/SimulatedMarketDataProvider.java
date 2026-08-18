@@ -2,6 +2,7 @@ package com.tradewise.marketdata.simulator;
 
 import com.tradewise.marketdata.MarketDataProvider;
 import com.tradewise.marketdata.model.Candle;
+import com.tradewise.marketdata.model.DataSource;
 import com.tradewise.marketdata.model.HistoricalData;
 import com.tradewise.marketdata.model.MarketStatus;
 import com.tradewise.marketdata.model.Quote;
@@ -37,16 +38,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class SimulatedMarketDataProvider implements MarketDataProvider {
 
-    private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId MARKET_ZONE = ZoneId.of("America/New_York");
     private static final LocalTime PRE_OPEN_START = LocalTime.of(9, 0);
-    private static final LocalTime MARKET_OPEN = LocalTime.of(9, 15);
-    private static final LocalTime MARKET_CLOSE = LocalTime.of(15, 30);
-    /** A small fixed 2026 NSE holiday sample; a live provider would supply the real calendar. */
+    private static final LocalTime MARKET_OPEN = LocalTime.of(9, 30);
+    private static final LocalTime MARKET_CLOSE = LocalTime.of(16, 0);
+    /** A small fixed 2026 US market holiday sample; a live provider would supply the full calendar. */
     private static final Set<LocalDate> HOLIDAYS = Set.of(
-            LocalDate.of(2026, 1, 26),
-            LocalDate.of(2026, 8, 15),
-            LocalDate.of(2026, 10, 2),
-            LocalDate.of(2026, 11, 9));
+            LocalDate.of(2026, 1, 1),
+            LocalDate.of(2026, 7, 3),
+            LocalDate.of(2026, 11, 26),
+            LocalDate.of(2026, 12, 25));
 
     private static final int PRICE_SCALE = 2;
 
@@ -87,7 +88,8 @@ public class SimulatedMarketDataProvider implements MarketDataProvider {
                         .divide(previousClose, 2, RoundingMode.HALF_UP);
 
         return Optional.of(new Quote(stock.symbol(), stock.companyName(), price, dayOpen, dayHigh, dayLow,
-                previousClose, changeAbsolute, changePercent, volumeAt(stock, now), now));
+                previousClose, changeAbsolute, changePercent, volumeAt(stock, now),
+                marketNow.toLocalDate(), DataSource.SIMULATED, now));
     }
 
     @Override

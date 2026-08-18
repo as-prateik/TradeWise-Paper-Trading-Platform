@@ -14,6 +14,7 @@ import com.tradewise.common.OrderSide;
 import com.tradewise.exception.ApiException;
 import com.tradewise.exception.ErrorCode;
 import com.tradewise.marketdata.MarketDataService;
+import com.tradewise.marketdata.model.DataSource;
 import com.tradewise.marketdata.model.MarketStatus;
 import com.tradewise.marketdata.model.Quote;
 import com.tradewise.order.OrderService.PlacementResult;
@@ -61,7 +62,8 @@ class OrderServiceImplTest {
 
     private Quote quoteAt(String price) {
         return new Quote("RELIANCE", "Reliance Industries Ltd", new BigDecimal(price),
-                null, null, null, null, null, null, 0, NOW);
+                null, null, null, null, null, null, 0,
+                NOW.atZone(ZoneOffset.UTC).toLocalDate(), DataSource.SIMULATED, NOW);
     }
 
     private void stubNewOrderPersistence() {

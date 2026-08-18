@@ -19,9 +19,20 @@ tradewise:
       issuer: tradewise
     bcrypt-cost: 12
   wallet:
-    seed-balance: ${WALLET_SEED_BALANCE:1000000.0000}
+    # USD: the tradable universe is US large caps, where free market data is available.
+    seed-balance: ${WALLET_SEED_BALANCE:100000.0000}
   marketdata:
     simulator:
-      # Phase 1: the simulated market is always open so trading is demoable at any hour.
-      # Set false to derive OPEN/PRE_OPEN/CLOSED/HOLIDAY from real NSE hours (IST).
+      # The market reports open around the clock so trading is demoable at any hour.
+      # Set false to enforce real session times instead.
       always-open: ${SIMULATOR_ALWAYS_OPEN:true}
+    alphavantage:
+      # No default: without a key the app starts normally and serves simulated prices.
+      api-key: ${ALPHAVANTAGE_API_KEY:}
+      base-url: https://www.alphavantage.co
+      # Free tier allows 25 requests/day. One request per symbol returns both the
+      # latest close and 100 days of history, so a full 12-symbol refresh costs 12.
+      # The gap to 25 is deliberate headroom for restarts and manual refreshes.
+      daily-budget: ${ALPHAVANTAGE_DAILY_BUDGET:20}
+      stale-after-hours: ${ALPHAVANTAGE_STALE_AFTER_HOURS:20}
+      timeout-seconds: 10

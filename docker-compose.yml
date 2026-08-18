@@ -26,6 +26,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-tradewise}
       # No default on purpose: compose fails fast if JWT_SECRET is not exported.
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (>= 32 characters) before starting}
+      # Optional: without a key the app serves simulated prices and says so in the UI.
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY:-}
     ports:
       - "8080:8080"
 

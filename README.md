@@ -4,8 +4,8 @@ A real-time paper trading platform: virtual cash, real-feeling market data, mark
 and portfolio tracking with honest P&L accounting. Built as a portfolio project with a
 depth-over-breadth philosophy — a correct, tested order engine over a dozen half-features.
 
-**Phase 1 (this repo): backend + frontend complete.** Auth, virtual wallet, deterministic
-market simulator, market buy/sell with an atomic execution engine, portfolio with realized
+**Phase 1 (this repo): backend + frontend complete.** Auth, virtual wallet, real end-of-day
+market data with a deterministic simulator fallback, market buy/sell with an atomic execution engine, portfolio with realized
 and unrealized P&L, a read-only dashboard — and an Angular 22 client covering all seven
 screens. Advanced order types, watchlists and WebSocket streaming are Phase 2 (see
 [Roadmap](#roadmap--out-of-scope-for-phase-1)).
@@ -88,7 +88,7 @@ tables: intent + lifecycle, executions only, and cash movements respectively.
 - **Money.** `BigDecimal` everywhere; `NUMERIC(19,4)` in Postgres; `HALF_UP` at every
   write boundary (`common/MoneyConstants`). Quote prices use scale 2 (tick size);
   ledger math widens to scale 4. No `BigDecimal` is ever constructed from a `double`.
-- **Realized P&L: weighted-average cost**, not FIFO. It matches how Indian brokers
+- **Realized P&L: weighted-average cost**, not FIFO. It matches how most brokers
   display positions, needs no lot bookkeeping, and keeps realized P&L a single
   accumulator per position. The choice is isolated in `Holding.applyBuy/applySell`, so
   FIFO could replace it without touching callers. Tested to the rounding digit.
@@ -107,14 +107,15 @@ tables: intent + lifecycle, executions only, and cash movements respectively.
   atomic check-and-debit at execution. (Reserve-on-place vs check-on-execute becomes a
   real decision with limit orders in Phase 2.)
 - **Market hours.** A market order placed while the market is closed is REJECTED, not
-  queued to open. The simulator reports OPEN around the clock by default
-  (`tradewise.marketdata.simulator.always-open`), so the app is demoable at 2am; set it
-  to `false` to enforce real NSE hours (IST) including pre-open and a holiday sample.
-- **The simulator is not a toy.** Price is a pure function of `(symbol, minute)` —
-  layered sinusoids with symbol-seeded phases plus bounded hash noise around a fixed
-  reference price. Deterministic by construction: quotes, charts and order-engine tests
-  agree on the same price for the same instant, and history's last candle closes at
-  exactly the current quote. Swappable behind `MarketDataProvider`.
+  queued to open. Because the data is end-of-day anyway, the market reports OPEN around
+  the clock by default (`tradewise.marketdata.simulator.always-open`) so the app is
+  demoable from any timezone; set it to `false` to enforce real US session hours
+  (America/New_York) including pre-open and a holiday sample.
+- **The simulator is the fallback, not the product.** Price is a pure function of
+  `(symbol, minute)` — layered sinusoids with symbol-seeded phases plus bounded hash
+  noise around a reference anchor. Deterministic by construction, which is what makes
+  order-engine tests reproducible and keeps the app usable with no API key. It is always
+  labelled `SIMULATED` in the UI so it can never be mistaken for a real price.
 - **Auth.** BCrypt cost 12; passwords capped at 72 chars (BCrypt truncates beyond 72
   bytes — we reject instead). Unknown-email and wrong-password return byte-identical
   401s, and login runs BCrypt against a dummy hash for unknown emails so timing is no
@@ -145,6 +146,27 @@ Every non-2xx response uses one envelope:
   "message": "This email is already registered", "path": "/api/v1/auth/register",
   "fieldErrors": null }
 ```
+
+## Market data
+
+The `MarketDataProvider` interface has three implementations behind a router:
+
+| Implementation | Role |
+|---|---|
+| `PersistedMarketDataProvider` | Serves real closes and daily candles out of Postgres |
+| `SimulatedMarketDataProvider` | Deterministic fallback when no real data exists |
+| `MarketDataProviderRouter` | Picks per request: real if stored, simulated otherwise |
+
+`MarketDataRefreshService` owns every upstream call, so no user request can be blocked by —
+or spend — the request budget. One `TIME_SERIES_DAILY` call per symbol returns both the
+latest close and 100 days of candles, so a full twelve-symbol refresh costs twelve of the
+25 daily requests. Two guards keep it there: **staleness** (a symbol is refreshed only if
+its snapshot is older than 20h, so restarts are free) and **budget** (spend is derived from
+stored fetch timestamps, so the counter survives restarts without extra state).
+
+Enable it by setting `ALPHAVANTAGE_API_KEY` ([free key](https://www.alphavantage.co/support/#api-key));
+leave it unset and the app runs on the simulator. Prices carry `source: LIVE | SIMULATED`
+and the `tradingDay` they belong to, and the UI shows both.
 
 ## Frontend
 
@@ -206,11 +228,11 @@ Then:
 curl -s -X POST localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' \
   -d '{"email":"me@example.com","password":"passw0rd123","fullName":"Me"}'
 
-# buy 10 RELIANCE (use the accessToken from above)
+# buy 10 AAPL (use the accessToken from above)
 curl -s -X POST localhost:8080/api/v1/orders \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: my-first-buy' \
-  -d '{"symbol":"RELIANCE","side":"BUY","type":"MARKET","quantity":10}'
+  -d '{"symbol":"AAPL","side":"BUY","type":"MARKET","quantity":10}'
 
 # watch it in the portfolio
 curl -s localhost:8080/api/v1/portfolio -H "Authorization: Bearer $TOKEN"
@@ -228,9 +250,14 @@ CI (GitHub Actions) runs the full suite including integration tests on every pus
 
 ## Known limitations — honest edition
 
-- **Market data is simulated.** Prices are a deterministic function around fixed
-  reference anchors, not a live feed. The `MarketDataProvider` interface is the seam
-  where a real provider plugs in; nothing downstream would change.
+- **Market data is end-of-day, not real time.** The free Alpha Vantage tier allows 25
+  requests/day, so prices are real *closing* prices refreshed once daily — they do not
+  tick intraday. The UI labels every price accordingly (`REAL CLOSE · 17 Aug` or
+  `SIMULATED`), because an unlabelled static price looks like a broken app.
+- **Without an API key everything still runs**, on the simulator, clearly badged. Any
+  symbol whose daily refresh failed or was skipped for budget also falls back.
+- **Twelve symbols, US markets.** Indian exchange data has no free, official, no-account
+  API — it needs a paid plan or a broker account — so the universe is US large caps.
 - **The frontend has no automated tests yet.** It was verified by a scripted browser
   click-through (register → buy → reject → sell → portfolio → chart → orders → account,
   plus guard and offline-error paths) and builds clean under strict mode, but there are no

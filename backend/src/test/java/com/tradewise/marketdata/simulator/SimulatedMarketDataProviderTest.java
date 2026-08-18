@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 
 class SimulatedMarketDataProviderTest {
 
-    /** A fixed Tuesday 11:00 IST (05:30 UTC). */
-    private static final Instant FIXED_INSTANT = Instant.parse("2026-08-18T05:30:00Z");
+    /** A fixed Tuesday 11:00 in New York (15:00 UTC), inside the regular session. */
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-08-18T15:00:00Z");
 
     private SimulatedMarketDataProvider providerAt(Instant instant, boolean alwaysOpen) {
         return new SimulatedMarketDataProvider(
@@ -27,8 +27,8 @@ class SimulatedMarketDataProviderTest {
     @Test
     @DisplayName("the same instant always produces the same quote — the simulator is deterministic")
     void quotesAreDeterministic() {
-        Quote first = providerAt(FIXED_INSTANT, true).getQuote("RELIANCE").orElseThrow();
-        Quote second = providerAt(FIXED_INSTANT, true).getQuote("RELIANCE").orElseThrow();
+        Quote first = providerAt(FIXED_INSTANT, true).getQuote("AAPL").orElseThrow();
+        Quote second = providerAt(FIXED_INSTANT, true).getQuote("AAPL").orElseThrow();
 
         assertThat(first.price()).isEqualByComparingTo(second.price());
         assertThat(first.volume()).isEqualTo(second.volume());
@@ -39,11 +39,11 @@ class SimulatedMarketDataProviderTest {
     @DisplayName("prices stay within the bounded envelope around the reference price")
     void pricesStayBounded() {
         var provider = providerAt(FIXED_INSTANT, true);
-        var reliance = StockUniverse.BY_SYMBOL.get("RELIANCE");
-        BigDecimal reference = reliance.referencePrice();
+        var apple = StockUniverse.BY_SYMBOL.get("AAPL");
+        BigDecimal reference = apple.referencePrice();
 
         for (int minutes = 0; minutes < 60 * 24 * 30; minutes += 17) {
-            BigDecimal price = provider.priceAt(reliance, FIXED_INSTANT.plusSeconds(minutes * 60L));
+            BigDecimal price = provider.priceAt(apple, FIXED_INSTANT.plusSeconds(minutes * 60L));
             assertThat(price).isPositive();
             // envelope: sum of component amplitudes = 6% around reference
             assertThat(price.doubleValue())
@@ -56,8 +56,8 @@ class SimulatedMarketDataProviderTest {
     void historyIsConsistentWithQuotes() {
         var provider = providerAt(FIXED_INSTANT, true);
 
-        Quote quote = provider.getQuote("TCS").orElseThrow();
-        HistoricalData history = provider.getHistory("TCS", TimeRange.ONE_DAY).orElseThrow();
+        Quote quote = provider.getQuote("MSFT").orElseThrow();
+        HistoricalData history = provider.getHistory("MSFT", TimeRange.ONE_DAY).orElseThrow();
         Candle lastCandle = history.candles().getLast();
 
         // The last candle closes exactly at "now", computed by the same price function.
@@ -70,7 +70,7 @@ class SimulatedMarketDataProviderTest {
     @DisplayName("candle invariants hold: low <= open,close <= high")
     void candleInvariantsHold() {
         HistoricalData history = providerAt(FIXED_INSTANT, true)
-                .getHistory("INFY", TimeRange.ONE_MONTH).orElseThrow();
+                .getHistory("NVDA", TimeRange.ONE_MONTH).orElseThrow();
 
         assertThat(history.candles()).isNotEmpty().allSatisfy(candle -> {
             assertThat(candle.high()).isGreaterThanOrEqualTo(candle.open());
@@ -86,30 +86,30 @@ class SimulatedMarketDataProviderTest {
         var provider = providerAt(FIXED_INSTANT, true);
 
         assertThat(provider.getQuote("NOPE")).isEmpty();
-        assertThat(provider.search("reliance")).extracting("symbol").containsExactly("RELIANCE");
-        assertThat(provider.search("bank")).extracting("symbol")
-                .contains("HDFCBANK", "ICICIBANK", "AXISBANK");
+        assertThat(provider.search("apple")).extracting("symbol").containsExactly("AAPL");
+        assertThat(provider.search("inc")).extracting("symbol")
+                .contains("AAPL", "AMZN", "TSLA", "V");
         assertThat(provider.search("   ")).isEmpty();
     }
 
     @Test
-    @DisplayName("market status honors always-open, and otherwise follows IST trading hours")
+    @DisplayName("market status honors always-open, and otherwise follows US trading hours")
     void marketStatusFollowsConfigurationAndClock() {
         assertThat(providerAt(FIXED_INSTANT, true).getMarketStatus()).isEqualTo(MarketStatus.OPEN);
 
-        // Tuesday 11:00 IST — open
+        // Tuesday 11:00 ET — regular session
         assertThat(providerAt(FIXED_INSTANT, false).getMarketStatus()).isEqualTo(MarketStatus.OPEN);
-        // Tuesday 09:05 IST — pre-open
-        assertThat(providerAt(Instant.parse("2026-08-18T03:35:00Z"), false).getMarketStatus())
+        // Tuesday 09:05 ET — pre-open
+        assertThat(providerAt(Instant.parse("2026-08-18T13:05:00Z"), false).getMarketStatus())
                 .isEqualTo(MarketStatus.PRE_OPEN);
-        // Tuesday 20:00 IST — closed
-        assertThat(providerAt(Instant.parse("2026-08-18T14:30:00Z"), false).getMarketStatus())
+        // Tuesday 17:00 ET — after the close
+        assertThat(providerAt(Instant.parse("2026-08-18T21:00:00Z"), false).getMarketStatus())
                 .isEqualTo(MarketStatus.CLOSED);
         // Sunday — closed
-        assertThat(providerAt(Instant.parse("2026-08-16T05:30:00Z"), false).getMarketStatus())
+        assertThat(providerAt(Instant.parse("2026-08-16T15:00:00Z"), false).getMarketStatus())
                 .isEqualTo(MarketStatus.CLOSED);
-        // Independence Day 2026 — holiday
-        assertThat(providerAt(Instant.parse("2026-08-15T05:30:00Z"), false).getMarketStatus())
+        // Christmas Day 2026 — holiday
+        assertThat(providerAt(Instant.parse("2026-12-25T15:00:00Z"), false).getMarketStatus())
                 .isEqualTo(MarketStatus.HOLIDAY);
     }
 }

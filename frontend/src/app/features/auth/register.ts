@@ -14,7 +14,7 @@ import { AuthStore } from '../../core/auth/auth-store';
       <div class="head">
         <span class="mark">TW</span>
         <h1>Create your account</h1>
-        <p class="muted small">You start with ₹10,00,000 of virtual cash to trade with.</p>
+        <p class="muted small">You start with $100,000 of virtual cash to trade with.</p>
       </div>
 
       @if (error(); as appError) {

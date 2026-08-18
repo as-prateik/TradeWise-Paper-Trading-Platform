@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.tradewise.marketdata.MarketDataService;
+import com.tradewise.marketdata.model.DataSource;
 import com.tradewise.marketdata.model.Quote;
 import com.tradewise.portfolio.dto.PortfolioResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +47,8 @@ class PortfolioServiceImplTest {
 
     private Quote quoteOf(String symbol, String price) {
         return new Quote(symbol, symbol + " Ltd", new BigDecimal(price),
-                null, null, null, null, null, null, 0, Instant.now());
+                null, null, null, null, null, null, 0,
+                LocalDate.now(), DataSource.SIMULATED, Instant.now());
     }
 
     @Test

@@ -68,7 +68,7 @@ import { AuthStore } from '../../core/auth/auth-store';
       </form>
 
       <p class="small muted center">
-        No account yet? <a routerLink="/register">Create one</a> — it comes with ₹10,00,000 in virtual cash.
+        No account yet? <a routerLink="/register">Create one</a> — it comes with $100,000 in virtual cash.
       </p>
     </div>
   `,

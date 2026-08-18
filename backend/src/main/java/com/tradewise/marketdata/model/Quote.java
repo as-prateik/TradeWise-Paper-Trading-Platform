@@ -2,10 +2,15 @@ package com.tradewise.marketdata.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
- * A point-in-time price snapshot. Quote prices use scale 2 (exchange tick size);
- * downstream money arithmetic widens to the storage scale of 4.
+ * A price snapshot.
+ *
+ * <p>{@code tradingDay} and {@code source} exist so the client can state plainly what
+ * it is showing: with the free upstream tier the price is a real <em>closing</em>
+ * price for a given day, not a live tick, and when no live data is available it is
+ * simulated. Hiding that distinction is what made prices look simply wrong.
  */
 public record Quote(
         String symbol,
@@ -18,6 +23,8 @@ public record Quote(
         BigDecimal changeAbsolute,
         BigDecimal changePercent,
         long volume,
+        LocalDate tradingDay,
+        DataSource source,
         Instant asOf
 ) {
 }
