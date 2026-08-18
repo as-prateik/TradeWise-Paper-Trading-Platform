@@ -10,3 +10,5 @@ target/
 .env
 node_modules/
 dist/
+.angular/
+frontend/dist/

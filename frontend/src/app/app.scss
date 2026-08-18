@@ -1,0 +1,67 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 58px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+  font-weight: 600;
+}
+.brand:hover { text-decoration: none; }
+.mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #04122c;
+  font-size: 12px;
+  font-weight: 700;
+}
+.paper { font-size: 10px; }
+
+.nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.nav a {
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.nav a.active { background: var(--accent-dim); color: var(--accent); }
+
+.who { white-space: nowrap; }
+
+.content {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 26px 24px 60px;
+}
+.content.plain {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+@media (max-width: 780px) {
+  .topbar { gap: 12px; padding: 0 12px; overflow-x: auto; }
+  .name, .who { display: none; }
+  .content { padding: 16px 12px 48px; }
+}

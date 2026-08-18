@@ -1,0 +1,26 @@
+@if (authStore.isAuthenticated()) {
+  <header class="topbar">
+    <a class="brand" routerLink="/dashboard">
+      <span class="mark">TW</span>
+      <span class="name">TradeWise</span>
+      <span class="chip chip-neutral paper">PAPER</span>
+    </a>
+
+    <nav class="nav">
+      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+      <a routerLink="/trade" routerLinkActive="active">Trade</a>
+      <a routerLink="/portfolio" routerLinkActive="active">Portfolio</a>
+      <a routerLink="/orders" routerLinkActive="active">Orders</a>
+      <a routerLink="/account" routerLinkActive="active">Account</a>
+    </nav>
+
+    <div class="row">
+      <span class="who small dim">{{ authStore.user()?.fullName }}</span>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="signOut()">Sign out</button>
+    </div>
+  </header>
+}
+
+<main class="content" [class.plain]="!authStore.isAuthenticated()">
+  <router-outlet />
+</main>
